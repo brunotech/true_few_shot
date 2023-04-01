@@ -47,11 +47,9 @@ def dev_eval(config, model, batcher, num_batches, dict_avg_val=None):
     :return: currrent dev score
     '''
 
-    dict_eval = {}
-    dict_eval["num_batches"] = num_batches
-
+    dict_eval = {"num_batches": num_batches}
     if dict_avg_val is not None:
-        dict_eval.update(dict_avg_val)
+        dict_eval |= dict_avg_val
 
     # Get train Score
     preds = {}
@@ -110,10 +108,7 @@ def test_eval(config, model, batcher):
             if config.dataset.lower() == 'fewglue/record':
                 list_idx = batch["input"]["qas_idx"]
                 list_lbl = batch["input"]["candidate_entity"]
-                test_writer.add_batch(list_idx, pred_lbl, list_lbl, lbl_logits.cpu().numpy())
-            else:
-                test_writer.add_batch(list_idx, pred_lbl, list_lbl, lbl_logits.cpu().numpy())
-
+            test_writer.add_batch(list_idx, pred_lbl, list_lbl, lbl_logits.cpu().numpy())
     test_writer.flush_file()
 
 

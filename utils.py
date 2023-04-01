@@ -127,7 +127,7 @@ def get_logprobs(prompt, engine='ada', retry_delay=10, logprobs=100, model=None,
 def format_prompt(train, d, last_train_idx, permutation, verbalizer=[], rel=None, instruction='\n', template=''):
     examples = [train[tidx] for tidx in permutation] + [d]
     char_spans = []
-    
+
     template = template.strip()
     assert template.count('[Y]') == 1, template
     if len(examples) == 1:
@@ -148,7 +148,7 @@ def format_prompt(train, d, last_train_idx, permutation, verbalizer=[], rel=None
             xs = [verbalizer[x] if x_no == (len(ex) - 1) else x.strip() for x_no, x in enumerate(ex)]
             if rel in {'cb', 'rte'}:
                 xs[1] = xs[1].rstrip('.?!')
-            
+
             char_span_start = {'example': len(prompt)}
             char_span_end = {}
             example_text = template
@@ -177,21 +177,20 @@ def format_prompt(train, d, last_train_idx, permutation, verbalizer=[], rel=None
         assert template.count('[X]') == 1, template
         prompt = instruction
         for x, y in examples:
-            char_span_start = {}
             char_span_end = {}
-            
-            char_span_start['example'] = len(prompt)
+
+            char_span_start = {'example': len(prompt)}
             if template.startswith('[X]'):
                 char_span_start['x0'] = len(prompt)
                 char_span_end['x0'] = char_span_start['x0'] + len(x)
             else:
                 char_span_start['x0'] = len(prompt) + template.index(' [X]')
                 char_span_end['x0'] = char_span_start['x0'] + 1 + len(x)
-            
+
             template_with_x = template.replace('[X]', x)
             char_span_start['y'] = len(prompt) + template_with_x.index(' [Y]')
             char_span_end['y'] = char_span_start['y'] + 1 + len(y)
-            
+
             prompt += template_with_x.replace('[Y]', y)
             if len(examples) > 1:
                 prompt += '\n'
@@ -418,12 +417,9 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     else:
         threshold = im.norm(data.max())/2.
 
-    # Set default alignment to center, but allow it to be
-    # overwritten by textkw.
-    kw = dict(horizontalalignment="center",
-              verticalalignment="center")
-    kw.update(textkw)
-
+    kw = (
+        dict(horizontalalignment="center", verticalalignment="center") | textkw
+    )
     # Get the formatter in case a string is supplied
     if isinstance(valfmt, str):
         valfmt = mpl.ticker.StrMethodFormatter(valfmt)
@@ -442,8 +438,7 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
 
 def is_hamiltonian(p):
     p_rot = [p]
-    for _ in range(p.shape[0] - 1):
-        p_rot.append(p_rot[-1][p])
+    p_rot.extend(p_rot[-1][p] for _ in range(p.shape[0] - 1))
     p_rot = np.array(p_rot)
     return len(set(p_rot[:, -1])) == p.shape[0]
 
@@ -453,7 +448,7 @@ def rand_hamiltonian_perm(n, perm_seed=0):
     old_loc = 0
     rem_idxs = list(range(1, n))
     perm_rng = random.Random(perm_seed)
-    for idx in range(n - 1):
+    for _ in range(n - 1):
         new_loc = perm_rng.choice(rem_idxs)
         rem_idxs.pop(rem_idxs.index(new_loc))
         p_rand[new_loc] = old_loc
@@ -470,7 +465,7 @@ def generate_permutations(num_train, num_dev, data_name):
         permutations = list(itertools.permutations(range(num_train)))
         cyclic_permutations = np.random.default_rng(0).permutation(num_dev).tolist()
         return permutations, cyclic_permutations
-    
+
     if (num_train > 5) and (data_name != 'TREx'):
         raise NotImplemented(f'num_train > 5 for {data_name}')
 
@@ -480,7 +475,7 @@ def generate_permutations(num_train, num_dev, data_name):
         # num_train == 5 option for backward compatibility
         p_rand = np.array(random.Random(0).choice(ps)) if num_train == 5 else np.array(rand_hamiltonian_perm(num_train))
         all_plists = []
-        while (len(ps) > 0) and ((len(all_plists) * num_train) < max_permutations):
+        while ps and (len(all_plists) * num_train) < max_permutations:
             plist = [ps.pop(0)]
             for _ in range(num_train - 1):
                 plist.append(tuple(plist[-1][i] for i in p_rand))
@@ -494,7 +489,7 @@ def generate_permutations(num_train, num_dev, data_name):
         all_plists = all_plists.reshape(-1, all_plists.shape[-1])
         cyclic_permutations = [permutations.index(tuple(p)) for p in all_plists]
         return permutations, cyclic_permutations
-    
+
     p_rand = np.array(rand_hamiltonian_perm(num_train))
     all_plists = []
     p_rng = random.Random(0)
@@ -508,8 +503,7 @@ def generate_permutations(num_train, num_dev, data_name):
             p_rng.shuffle(perm)
             perm = tuple(perm)
         plist = [perm]
-        for _ in range(num_train - 1):
-            plist.append(tuple(plist[-1][i] for i in p_rand))
+        plist.extend(tuple(plist[-1][i] for i in p_rand) for _ in range(num_train - 1))
         all_plists += plist
         plist = np.array(plist)
         assert np.all(plist.sum(1) == plist.sum(1)[0]), 'Expected each training set to have one of each sample'
@@ -544,7 +538,7 @@ def complete_lm(model, tokenizer, prompt, l=0, num_log_probs=100, echo=True):
         prompt = [prompt] # the code below assumes a list
     input_ids = tokenizer.batch_encode_plus(prompt, return_tensors="pt", padding=True, return_offsets_mapping=True)
     offset_mapping = input_ids.pop('offset_mapping')
-    
+
     # greedily generate l tokens
     if l > 0:
         assert not xlnet, f'Generation not implemented for {model.__class__.__name__}'
@@ -567,36 +561,35 @@ def complete_lm(model, tokenizer, prompt, l=0, num_log_probs=100, echo=True):
             position_ids = attention_mask.long().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask == 0, 1)
             logits = model.forward(input_ids=total_sequences, attention_mask=attention_mask, position_ids=position_ids, return_dict=True).logits.detach().cpu().float()
-        if not echo:
-            # get the top tokens and probs for the generated l tokens
-            probs = torch.softmax(logits[:,-l-1:], dim=2).cpu()
-        else:
-            # get the top tokens and probs for the context and the generated l tokens
-            probs = torch.softmax(logits, dim=2).cpu()
+        probs = (
+            torch.softmax(logits, dim=2).cpu()
+            if echo
+            else torch.softmax(logits[:, -l - 1 :], dim=2).cpu()
+        )
         top_probs, top_tokens = torch.topk(probs, k=num_log_probs)
         logprobs = torch.log(probs)
         top_log_probs = torch.log(top_probs)
 
-    # create the return value to resemble OpenAI
-    return_json = {}
     choices = []
     if not hasattr(tokenizer, 'id2token'):
         tokenizer.id2token = tokenizer.batch_decode(list(range(tokenizer.vocab_size)))
     for batch_id in range(len(prompt)):
-        curr_json = {}
-        # text is just the optional context and next l tokens
-        if not echo:
-            curr_json['text'] = tokenizer.decode(total_sequences[batch_id][-l:], skip_special_tokens=True)
-        else:
-            curr_json['text'] = tokenizer.decode(total_sequences[batch_id], skip_special_tokens=True)
-
+        curr_json = {
+            'text': tokenizer.decode(
+                total_sequences[batch_id], skip_special_tokens=True
+            )
+            if echo
+            else tokenizer.decode(
+                total_sequences[batch_id][-l:], skip_special_tokens=True
+            )
+        }
         # fill the return json with the top tokens and probs to match the OpenAI return value.
         if num_log_probs is not None:
-            curr_json['logprobs'] = {}
-            curr_json['logprobs']['top_logprobs'] = []
-            curr_json['logprobs']['token_logprobs'] = []
-            curr_json['logprobs']['tokens'] = []
-            
+            curr_json['logprobs'] = {
+                'top_logprobs': [],
+                'token_logprobs': [],
+                'tokens': [],
+            }
             nonzero_char_end_idxs = offset_mapping[batch_id, :, 1].nonzero()
             start_tok = min(nonzero_char_end_idxs).item() # inclusive
             end_tok = max(nonzero_char_end_idxs).item() + 1 # exclusive
@@ -604,7 +597,7 @@ def complete_lm(model, tokenizer, prompt, l=0, num_log_probs=100, echo=True):
                 assert len(offset_mapping[batch_id, :, 1]) == end_tok
             assert torch.all(offset_mapping[batch_id, start_tok: end_tok, 1] != 0).item(), f'Expected nonzero {offset_mapping[batch_id, start_tok: end_tok, 1]}'
             curr_json['logprobs']['text_offset'] = offset_mapping[batch_id, start_tok:end_tok, 0].tolist()
-            
+
             if not echo:
                 # cutoff the -1 here because the probs are shifted one over for LMs
                 for current_element_top_log_probs, current_element_top_tokens in zip(top_log_probs[batch_id][:-1], top_tokens[batch_id][:-1]):
@@ -642,8 +635,7 @@ def complete_lm(model, tokenizer, prompt, l=0, num_log_probs=100, echo=True):
                 assert len(set(lengths.values())) == 1, f'Mismatched lengths: {lengths}'
 
         choices.append(curr_json)
-    return_json['choices'] = choices
-    return return_json
+    return {'choices': choices}
 
 
 def get_model_response(model, tokenizer, prompts, num_log_probs=100, batch_size=4):
@@ -663,6 +655,15 @@ def get_model_response(model, tokenizer, prompts, num_log_probs=100, batch_size=
         raise NotImplemented('Ensure that returned text offset values are as expected, given the above addition of a control code.')
     all_raw_answers = []
     for test_chunk_prompts in chunks(prompts, batch_size):
-        for choice in complete_lm(model, tokenizer, test_chunk_prompts, 0, num_log_probs=num_log_probs, echo=True)['choices']:
-            all_raw_answers.append(choice['logprobs'])
+        all_raw_answers.extend(
+            choice['logprobs']
+            for choice in complete_lm(
+                model,
+                tokenizer,
+                test_chunk_prompts,
+                0,
+                num_log_probs=num_log_probs,
+                echo=True,
+            )['choices']
+        )
     return all_raw_answers

@@ -54,7 +54,7 @@ def tokenize_pet_mlm_txt(tokenizer, config, txt1, txt2, txt3, txt_trim, mask_idx
         sample_length = min(tot_length, config.max_text_length)
         upto_ratio_mask = 1 if config.fixed_mask_ratio else np.random.rand()
         num_sample = max(int(upto_ratio_mask * config.mask_alpha * sample_length), 2) - 1
-        mask_idx = random.sample(range(0, sample_length), k=num_sample)
+        mask_idx = random.sample(range(sample_length), k=num_sample)
         mask_idx = np.asarray(mask_idx)
 
     # Copy adds mask idx at random positions

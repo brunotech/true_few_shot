@@ -53,7 +53,7 @@ def plot_results_by_num_train_adapet(tn2sm2str, tn, sms, stat, min_num_train, nu
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
     xs = np.round(np.exp(np.linspace(np.log(min_num_train), np.log(tn2num_lines[tn]), num_trains)) * examples_per_train).astype(int)
-    xs = xs[:min([len(tn2sm2str[tn][sm][stat]) for sm in sms])]
+    xs = xs[:min(len(tn2sm2str[tn][sm][stat]) for sm in sms)]
     plt.plot(xs, tn2sm2str[tn]['Mean'][stat], label=sm2name['Mean'], color='k')
     plt.fill_between(xs, tn2sm2str[tn]['Worst'][stat], tn2sm2str[tn]['Best'][stat], color='gray', alpha=0.3, linewidth=0)
     for sm_no, sm in enumerate(sms):
@@ -88,7 +88,7 @@ def get_stats(save_dir, i, iter_no, tss, eps=1e-6, load_separate_dev_scores=True
             labels_filebase = f'eval_train_labels.seed-{tss}' if split == 'train' else 'dev_labels'
             with open(f'data/fewglue/ReCoRD/{labels_filebase}.json') as f:
                 idx2labels = json.load(f)
-            
+
             acc_cor_cnt = 0
             acc_ttl_cnt = 0
             nlls = []
@@ -133,7 +133,7 @@ def get_stats(save_dir, i, iter_no, tss, eps=1e-6, load_separate_dev_scores=True
             pred_lbl, true_lbl, probs = np.transpose(split_results[:, 0, :], (1, 0))
             if isinstance(true_lbl[0], bool):
                 true_lbl = true_lbl.astype(int)
-            probs = np.array([p for p in probs]).astype(float)
+            probs = np.array(list(probs)).astype(float)
             if 'fewglue/COPA' in save_dir:  # probs are actually logits
                 assert len(probs.shape) == 2, f'Expected len(probs.shape) ({len(probs.shape)}) == 2'
                 probs = softmax(probs, axis=-1)
@@ -150,7 +150,7 @@ def get_stats(save_dir, i, iter_no, tss, eps=1e-6, load_separate_dev_scores=True
 
             out[f'computed_{split}_acc'] = np.mean(pred_lbl == true_lbl)
             out[f'computed_{split}_loss'] = np.sum([nll[true] for nll, true in zip(nlls, true_lbl)])
-        
+
     # Add ADAPET officially computed scores and losses
     if ('fewglue/ReCoRD' in save_dir) and load_separate_dev_scores:
         config = Config(os.path.join(save_dir, "config.json"), mkdir=False, update_exp_config=False)
@@ -165,7 +165,7 @@ def get_stats(save_dir, i, iter_no, tss, eps=1e-6, load_separate_dev_scores=True
         with open(f'{save_dir}/dev_scores.json') as f:
             for k, v in [json.loads(line) for line in f][i].items():
                 out[k] = v
-        
+
     return out
 
 

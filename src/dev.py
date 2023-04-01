@@ -18,7 +18,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_labels", default=False, action='store_true')
     args = parser.parse_args()
     checkpoint = "cur_model.pt" if args.iter is None else f'iter-{args.iter}.model.pt'
-    save_prefix = f'eval' if args.iter is None else f'eval.iter-{args.iter}'
+    save_prefix = 'eval' if args.iter is None else f'eval.iter-{args.iter}'
 
     config_file = os.path.join(args.exp_dir, "config.json")
     base_dir, exp_name = args.exp_dir.rsplit('/', 1)

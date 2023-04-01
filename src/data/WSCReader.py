@@ -30,7 +30,7 @@ class WSCReader(object):
         # Different lbl for each pattern
         self.pet_pvps = self.pet_patterns
         self._num_pets = len(self.pet_pvps)
-        self._pet_names = ["PET{}".format(i+1) for i in range(self._num_pets)]
+        self._pet_names = [f"PET{i + 1}" for i in range(self._num_pets)]
 
 
     def _get_file(self, split):
@@ -47,7 +47,7 @@ class WSCReader(object):
         elif split.lower() == "test":
             file = os.path.join("data", "superglue", "WSC", "test.jsonl")
         else:
-            raise ValueError("Invalid split: %s" % split)
+            raise ValueError(f"Invalid split: {split}")
         return file
 
     def get_num_lbl_tok(self):
@@ -64,21 +64,17 @@ class WSCReader(object):
         data = []
 
         with open(file, 'r') as f_in:
-            for line in get_subset([line for line in f_in.readlines()], self.config, split, is_eval):
+            for line in get_subset(list(f_in.readlines()), self.config, split, is_eval):
                 json_string = json.loads(line.strip('\n'))
 
                 text = json_string["text"]
                 pronoun, pronoun_idx = json_string["target"]["span2_text"], \
-                                       json_string["target"]["span2_index"]
+                                           json_string["target"]["span2_index"]
                 noun, noun_idx = json_string["target"]["span1_text"], \
-                                 json_string["target"]["span1_index"]
+                                     json_string["target"]["span1_index"]
                 idx = json_string["idx"]
 
-                if "label" in json_string:
-                    lbl = json_string["label"]
-                else:
-                    lbl = -1
-
+                lbl = json_string["label"] if "label" in json_string else -1
                 words_text = text.split()
                 words_lower = text.lower().split()
                 words_noun = noun.lower().split()
@@ -99,16 +95,16 @@ class WSCReader(object):
                         if words_text[pronoun_idx + offset] == pronoun:
                             pronoun_idx += offset
 
-                    if words_text[pronoun_idx] != pronoun and words_text[pronoun_idx].startswith(pronoun):
-                        words_text = words_text[:pronoun_idx] \
+                if words_text[pronoun_idx] != pronoun and words_text[pronoun_idx].startswith(pronoun):
+                    words_text = words_text[:pronoun_idx] \
                                   + [words_text[pronoun_idx][:len(pronoun)], words_text[pronoun_idx][len(pronoun):]] \
                                   + words_text[pronoun_idx + 1:]
 
                 assert words_text[pronoun_idx] == pronoun, \
-                    f"Got '{words_text[pronoun_idx]}' but expected '{pronoun}' at index {pronoun_idx} for '{words_text}'"
+                        f"Got '{words_text[pronoun_idx]}' but expected '{pronoun}' at index {pronoun_idx} for '{words_text}'"
 
                 orig_text = ' '.join(words_text)
-                words_text[pronoun_idx] = '*' + words_text[pronoun_idx] + '*'
+                words_text[pronoun_idx] = f'*{words_text[pronoun_idx]}*'
                 text = ' '.join(words_text)
 
                 len_noun = max(len(self.tokenizer(words_text[noun_idx], add_special_tokens=False)["input_ids"]), 1)
@@ -124,8 +120,7 @@ class WSCReader(object):
                     continue
                 data.append(dict_input_output)
 
-        data = np.asarray(data)
-        return data
+        return np.asarray(data)
 
     @property
     def pets(self):
@@ -180,7 +175,9 @@ class WSCReader(object):
             lbl_mask = n.split() + [self.tokenizer.pad_token] * (num_lbl_tok - noun_num_lbl_tok)
             list_lbl_choices.append([' '.join(lbl_mask)])
 
-        assert len(list_input_ids) > 0, f'Expected len(list_input_ids) ({len(list_input_ids)}) > 0\nRelevant variables:\nlist_text = {list_text}\nlist_pronoun = {list_pronoun}\nlist_noun {list_noun}\nlist_lbl {list_lbl}\nbatch {batch}'
+        assert (
+            list_input_ids
+        ), f'Expected len(list_input_ids) ({len(list_input_ids)}) > 0\nRelevant variables:\nlist_text = {list_text}\nlist_pronoun = {list_pronoun}\nlist_noun {list_noun}\nlist_lbl {list_lbl}\nbatch {batch}'
         tensor_input_ids = remove_extra_padding(list_input_ids)
         tensor_mask_ids = torch.tensor(list_mask_idx)
         tensor_mask_ids[tensor_mask_ids == (self.config.max_text_length - 1)] = (tensor_input_ids.size(1) - 1)
@@ -240,7 +237,7 @@ class WSCReader(object):
         list_lbl_choices = []
 
         for b_idx, (t, p, n, lbl) in enumerate(zip(list_text, list_pronoun, list_noun, list_lbl)):
-            
+
             mask_txt_split_tuple = []
             noun_num_lbl_tok = self.get_lbl_num_lbl_tok(n)
             num_lbl_tok = min(noun_num_lbl_tok + 1, self.config.max_num_lbl_tok) # random.randint(0,3)
@@ -263,11 +260,15 @@ class WSCReader(object):
             list_mask_idx.append(list(range(mask_idx, mask_idx + num_lbl_tok)))
             list_lbl_choices.append([n])
 
-        assert len(list_input_ids) > 0, f'Expected len(list_input_ids) ({len(list_input_ids)}) > 0\nRelevant variables:\nlist_text = {list_text}\nlist_pronoun = {list_pronoun}\nlist_noun {list_noun}\nlist_lbl {list_lbl}\nbatch {batch}'
+        assert (
+            list_input_ids
+        ), f'Expected len(list_input_ids) ({len(list_input_ids)}) > 0\nRelevant variables:\nlist_text = {list_text}\nlist_pronoun = {list_pronoun}\nlist_noun {list_noun}\nlist_lbl {list_lbl}\nbatch {batch}'
         tensor_input_ids = remove_extra_padding(list_input_ids)
         tensor_mask_ids = torch.tensor(list_mask_idx)
         # tensor_mask_ids[tensor_mask_ids == (self.config.max_text_length - 1)] = (tensor_input_ids.size(1) - 1)
-        assert (tensor_mask_ids < (tensor_input_ids.size(1) - 1)).all().item(), f'Expected (tensor_mask_ids < (tensor_input_ids.size(1) - 1)).all().item(). Please uncomment line above.'
+        assert (
+            (tensor_mask_ids < (tensor_input_ids.size(1) - 1)).all().item()
+        ), 'Expected (tensor_mask_ids < (tensor_input_ids.size(1) - 1)).all().item(). Please uncomment line above.'
         return tensor_input_ids.to(device), tensor_mask_ids.to(device), list_lbl_choices
 
     def store_test_lbl(self, list_idx, pred_lbl, true_lbl, logits):
@@ -280,14 +281,10 @@ class WSCReader(object):
 
         with open(read_file, 'r') as f_in:
             for ctr, line in enumerate(f_in.readlines()):
-                answer_dict = {}
-                answer_dict["idx"] = ctr
+                answer_dict = {"idx": ctr}
                 pred_lbl = self.list_true_lbl[ctr]
 
-                if pred_lbl == 1:
-                    answer = "true"
-                else:
-                    answer = "false"
+                answer = "true" if pred_lbl == 1 else "false"
                 answer_dict["label"] = answer
 
                 write_file.write(json.dumps(answer_dict) + "\n")

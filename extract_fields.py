@@ -36,20 +36,24 @@ for num_train in args.num_trains:
             save_dir += f'.num_dev-{args.num_dev}'
 
         for seed in args.seeds:
-            rel_filebases = []
-            for rel_file in os.listdir(f'{save_dir}/seed-{seed}'):
-                if rel_file.endswith('.json') and ((args.data_name != 'TREx') or (rel_file[0] == 'P')):
-                    rel_filebases.append(f'{save_dir}/seed-{seed}/{rel_file[:-len(".json")]}')
+            rel_filebases = [
+                f'{save_dir}/seed-{seed}/{rel_file[:-len(".json")]}'
+                for rel_file in os.listdir(f'{save_dir}/seed-{seed}')
+                if rel_file.endswith('.json')
+                and ((args.data_name != 'TREx') or (rel_file[0] == 'P'))
+            ]
             if args.data_name == 'TREx':
                 assert len(rel_filebases) == 41, f'Expected len(rel_filebases) ({len(rel_filebases)}) == 41 relations'
-            for filebase in rel_filebases:
-                if not all([os.path.exists(f'{filebase}.key-{k}.npz') for k in keys]):
-                    filebases.append(filebase)
-
-
+            filebases.extend(
+                filebase
+                for filebase in rel_filebases
+                if not all(
+                    os.path.exists(f'{filebase}.key-{k}.npz') for k in keys
+                )
+            )
 processes = int(os.environ.get('SLURM_CPUS_PER_TASK', cpu_count()))
 print('# Processes:', processes)
 with Pool(processes=processes) as p:
     with tqdm(total=len(filebases)) as pbar:
-        for i, _ in enumerate(p.imap_unordered(save_keys, filebases)):
+        for _ in p.imap_unordered(save_keys, filebases):
             pbar.update()

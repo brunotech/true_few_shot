@@ -64,13 +64,15 @@ num_dev = None
 seeds = [0, 1, 2, 3, 4]
 rels = [data_name] if data_name != 'TREx' else ['P937', 'P740', 'P530', 'P527', 'P495', 'P47', 'P463', 'P449', 'P413', 'P407', 'P39', 'P37', 'P364', 'P361', 'P36', 'P31', 'P30', 'P279', 'P276', 'P27', 'P264', 'P20', 'P190', 'P19', 'P178', 'P176', 'P17', 'P159', 'P1412', 'P140', 'P138', 'P1376', 'P136', 'P131', 'P1303', 'P127', 'P108', 'P106', 'P103', 'P101', 'P1001']
 keys = ['nlls', 'ranks'] if data_name == 'TREx' else ['verbalizer_nlls', 'verbalizer_accs']
-if any(['example_nlls' in s for s in plot_stat_names]):
+if any('example_nlls' in s for s in plot_stat_names):
     keys.append('example_nlls')
 betas = [0.0, 1e8]  # 0 for MDL, 1e8 for LOOCV
-if any([('$\\beta=1.0$' in s) or ('$\\beta=1$' in s) for s in plot_stat_names]):
+if any(('$\\beta=1.0$' in s) or ('$\\beta=1$' in s) for s in plot_stat_names):
     betas.insert(1, 1.0)
-assert not (('nlls' in keys) and ('verbalizer_nlls' in keys))
-assert (max(num_trains) > 0) or (num_dev is not None), f'Not implemented: Using few-shot evaluation with num_dev != None'
+assert 'nlls' not in keys or 'verbalizer_nlls' not in keys
+assert (max(num_trains) > 0) or (
+    num_dev is not None
+), 'Not implemented: Using few-shot evaluation with num_dev != None'
 plot_data_name = 'LAMA-UHN' if data_name == 'TREx' else data_name
 max_num_samples = math.factorial(min(num_trains))
 num_train2num_samples = {num_train: np.array([f for f in range(1, max_num_samples + 1) if ((max_num_samples % f) == 0) and ((f % num_train == 0) or (f == 1))]).astype(int) for num_train in num_trains}
@@ -195,7 +197,27 @@ for plot_type in ['Test Accuracy of Chosen Prompt (%)', 'Accuracy at Choosing Be
         }.get(data_name, 0)
     for num_samples in ['Multi']:
         for num_train in num_trains:
-            plot_results_by_engine(acc_plot_type2num_train2engine2engine2stat2results, plot_type, num_train, engines, plot_stat_names, num_train2num_samples, scale, num_samples, top, bottom, plot_data_name, show_legend=exp in {'TREx-vary_models'}, show_y=exp in {'TREx-vary_models', 'RTE'}, show_legend_title=not (plot_data_name == 'LAMA-UHN' and scale == 'rel'), notebook=notebook, save_dir=save_dir if exp in {'TREx-vary_models', 'RTE', 'CB', 'WiC', 'BoolQ'} else None)
+            plot_results_by_engine(
+                acc_plot_type2num_train2engine2engine2stat2results,
+                plot_type,
+                num_train,
+                engines,
+                plot_stat_names,
+                num_train2num_samples,
+                scale,
+                num_samples,
+                top,
+                bottom,
+                plot_data_name,
+                show_legend=exp in {'TREx-vary_models'},
+                show_y=exp in {'TREx-vary_models', 'RTE'},
+                show_legend_title=plot_data_name != 'LAMA-UHN'
+                or scale != 'rel',
+                notebook=notebook,
+                save_dir=save_dir
+                if exp in {'TREx-vary_models', 'RTE', 'CB', 'WiC', 'BoolQ'}
+                else None,
+            )
 
 
 if len(num_trains) > 1:

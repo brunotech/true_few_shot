@@ -68,12 +68,24 @@ def train(config):
     # Ignore weight decay for certain parameters
     no_decay_param = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.model.named_parameters() if not any(nd in n for nd in no_decay_param)],
-         'weight_decay': config.weight_decay,
-         'lr': config.lr},
-        {'params': [p for n, p in model.model.named_parameters() if any(nd in n for nd in no_decay_param)],
-         'weight_decay': 0.0,
-         'lr': config.lr},
+        {
+            'params': [
+                p
+                for n, p in model.model.named_parameters()
+                if all(nd not in n for nd in no_decay_param)
+            ],
+            'weight_decay': config.weight_decay,
+            'lr': config.lr,
+        },
+        {
+            'params': [
+                p
+                for n, p in model.model.named_parameters()
+                if any(nd in n for nd in no_decay_param)
+            ],
+            'weight_decay': 0.0,
+            'lr': config.lr,
+        },
     ]
     optimizer = torch.optim.AdamW(optimizer_grouped_parameters, eps=1e-8)
 

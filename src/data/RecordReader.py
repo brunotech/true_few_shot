@@ -26,7 +26,7 @@ class RecordReader(object):
         # Different lbl for each pattern
         self.pet_pvps = self.pet_patterns
         self._num_pets = len(self.pet_pvps)
-        self._pet_names = ["PET{}".format(i+1) for i in range(self._num_pets)]
+        self._pet_names = [f"PET{i + 1}" for i in range(self._num_pets)]
 
     def _get_file(self, split):
         '''
@@ -56,7 +56,7 @@ class RecordReader(object):
 
         data = []
         with open(file, 'r') as f_in:
-            for line in get_subset([line for line in f_in.readlines()], self.config, split, is_eval):
+            for line in get_subset(list(f_in.readlines()), self.config, split, is_eval):
                 json_string = json.loads(line)
                 json_string_passage = json_string["passage"]
 
@@ -73,7 +73,7 @@ class RecordReader(object):
 
                 for qas in json_string["qas"]:
                     question = qas["query"]
-                    qas_idx = qas["idx"]
+                    set_seen_enty = set()
 
                     # If data has solution
                     if "answers" in qas:
@@ -86,36 +86,32 @@ class RecordReader(object):
                             text = answer["text"]
                             dict_entity_idx_2_sol[(start, end)] = text
 
-                            # Get all unique false entities for margin
-                            set_false_entities = set()
-                            for (enty_idx, enty) in dict_entity_idx_2_name.items():
-                                if enty_idx not in dict_entity_idx_2_sol.keys():
-                                    set_false_entities.add(enty)
+                            set_false_entities = {
+                                enty
+                                for enty_idx, enty in dict_entity_idx_2_name.items()
+                                if enty_idx not in dict_entity_idx_2_sol.keys()
+                            }
                             list_false_entities = list(set_false_entities)
 
                         # PET ensures each data gets exactly 1 true and the rest false during training
                         if split == "train" and not is_eval:
-                            set_seen_enty = set()
-
                             for enty_idx, enty in dict_entity_idx_2_name.items():
                                 # Create datapoints with each unique correct entity
-                                if enty_idx in dict_entity_idx_2_sol:
-                                    # Only see each entity once
-                                    if enty not in set_seen_enty:
-                                        list_sample_false_entities = random.sample(list_false_entities, min(len(list_false_entities), self.config.max_num_lbl-1))
-                                        # Replace entity with [MASK]
-                                        masked_question = question.replace("@placeholder", "[MASK]")
-                                        set_seen_enty.add(enty)
+                                if (
+                                    enty_idx in dict_entity_idx_2_sol
+                                    and enty not in set_seen_enty
+                                ):
+                                    list_sample_false_entities = random.sample(list_false_entities, min(len(list_false_entities), self.config.max_num_lbl-1))
+                                    # Replace entity with [MASK]
+                                    masked_question = question.replace("@placeholder", "[MASK]")
+                                    set_seen_enty.add(enty)
 
-                                        dict_input = {"idx": idx, "passage": passage, "question": masked_question, "true_entity": enty, "false_entities": list_sample_false_entities}
-                                        dict_output = {"lbl": 0}
-                                        dict_input_output = {"input": dict_input, "output": dict_output}
-                                        data.append(dict_input_output)
-                        # Construct evaluation sets with the lbl
+                                    dict_input = {"idx": idx, "passage": passage, "question": masked_question, "true_entity": enty, "false_entities": list_sample_false_entities}
+                                    dict_output = {"lbl": 0}
+                                    dict_input_output = {"input": dict_input, "output": dict_output}
+                                    data.append(dict_input_output)
                         else:
-                            set_seen_enty = set()
-
-                            for (enty_idx, enty) in dict_entity_idx_2_name.items():
+                            for enty in dict_entity_idx_2_name.values():
                                 if enty not in set_seen_enty:
                                     set_seen_enty.add(enty)
 
@@ -130,15 +126,14 @@ class RecordReader(object):
                             dict_input_output = {"input": dict_input, "output": dict_output}
                             data.append(dict_input_output)
                     else:
-                        # Test set without labels
-                        set_seen_enty = set()
-
-                        for (enty_idx, enty) in dict_entity_idx_2_name.items():
+                        for enty in dict_entity_idx_2_name.values():
                             if enty not in set_seen_enty:
                                 set_seen_enty.add(enty)
 
                         # Replace entity with [MASK]
                         masked_question = question.replace("@placeholder", "[MASK]")
+
+                        qas_idx = qas["idx"]
 
                         dict_input = {"idx": idx, "passage": passage, "question": masked_question,
                                         "candidate_entity": list(set_seen_enty), "qas_idx": qas_idx}
@@ -146,9 +141,7 @@ class RecordReader(object):
                         dict_input_output = {"input": dict_input, "output": dict_output}
                         data.append(dict_input_output)
 
-        data = np.asarray(data)
-
-        return data
+        return np.asarray(data)
 
     @property
     def pets(self):
@@ -183,7 +176,7 @@ class RecordReader(object):
 
             true_num_lbl_tok = self.get_lbl_num_lbl_tok(te)
             max_num_lbl_tok = true_num_lbl_tok
-            for idx, wrong_enty in enumerate(fe):
+            for wrong_enty in fe:
                 num_lbl_tok = self.get_lbl_num_lbl_tok(wrong_enty)
                 if num_lbl_tok > max_num_lbl_tok:
                     max_num_lbl_tok = num_lbl_tok
@@ -192,7 +185,12 @@ class RecordReader(object):
             pattern = self.pet_patterns[self._pet_names.index(mode)]
 
             for idx, txt_split in enumerate(pattern):
-                mask_txt_split_inp = txt_split.replace("[PASSAGE]", p).replace("[QUESTION]", q + " [SEP]").replace("[MASK] ", "[MASK] " * max_num_lbl_tok).replace("@highlight", "-")
+                mask_txt_split_inp = (
+                    txt_split.replace("[PASSAGE]", p)
+                    .replace("[QUESTION]", f"{q} [SEP]")
+                    .replace("[MASK] ", "[MASK] " * max_num_lbl_tok)
+                    .replace("@highlight", "-")
+                )
                 mask_txt_split_tuple.append(mask_txt_split_inp)
 
                 # Trim the paragraph
@@ -249,7 +247,7 @@ class RecordReader(object):
 
             true_num_lbl_tok = self.get_lbl_num_lbl_tok(te)
             max_num_lbl_tok = true_num_lbl_tok
-            for idx, wrong_enty in enumerate(fe):
+            for wrong_enty in fe:
                 num_lbl_tok = self.get_lbl_num_lbl_tok(wrong_enty)
                 if num_lbl_tok > max_num_lbl_tok:
                     max_num_lbl_tok = num_lbl_tok
@@ -258,7 +256,11 @@ class RecordReader(object):
             pattern = self.pet_patterns[self._pet_names.index(mode)]
 
             for idx, txt_split in enumerate(pattern):
-                txt_split_inp = txt_split.replace("[PASSAGE]", p).replace("[QUESTION]", q + " [SEP]").replace("@highlight", "-")
+                txt_split_inp = (
+                    txt_split.replace("[PASSAGE]", p)
+                    .replace("[QUESTION]", f"{q} [SEP]")
+                    .replace("@highlight", "-")
+                )
                 txt_split_tuple.append(txt_split_inp)
 
                 # Trim the paragraph
@@ -289,7 +291,7 @@ class RecordReader(object):
         list_input_ids = []
         list_mask_idx = []
 
-        for b_idx, (p, q, cands) in enumerate(zip(list_passage, list_question, list_candidates)):
+        for p, q, cands in zip(list_passage, list_question, list_candidates):
             pattern = self.pet_patterns[self._pet_names.index(mode)]
             list_mask_idx_lbls = []
 
@@ -298,7 +300,12 @@ class RecordReader(object):
                 mask_txt_split_tuple = []
                 txt_trim = -1
                 for idx, txt_split in enumerate(pattern):
-                    mask_txt_split_inp = txt_split.replace("[PASSAGE]", p).replace("[QUESTION]", q + " [SEP]").replace("[MASK]", "[MASK] " * num_cnd_tok).replace("@highlight", "-")
+                    mask_txt_split_inp = (
+                        txt_split.replace("[PASSAGE]", p)
+                        .replace("[QUESTION]", f"{q} [SEP]")
+                        .replace("[MASK]", "[MASK] " * num_cnd_tok)
+                        .replace("@highlight", "-")
+                    )
                     mask_txt_split_tuple.append(mask_txt_split_inp)
 
                     # Trim the paragraph

@@ -40,10 +40,7 @@ class Batcher(object):
     @staticmethod
     def my_collate_fn(batch):
 
-        dict_batch = {}
-        dict_batch["input"] = {}
-        dict_batch["output"] = {}
-
+        dict_batch = {"input": {}, "output": {}}
         for datapoint in batch:
             for (k, v) in datapoint["input"].items():
                 if k in dict_batch["input"]:
@@ -126,8 +123,10 @@ class Batcher(object):
                             break
                 for gpu_batch_step in range(self.config.grad_accumulation_factor):
                     batch_slice = slice(gpu_batch_step * self.config.batch_size, (gpu_batch_step + 1) * self.config.batch_size)
-                    gpu_batch = {k1: {k2: v2[batch_slice] for k2, v2 in v1.items()} for k1, v1 in x.items()}
-                    yield gpu_batch
+                    yield {
+                        k1: {k2: v2[batch_slice] for k2, v2 in v1.items()}
+                        for k1, v1 in x.items()
+                    }
 
     def get_eval_train_batch(self):
         '''
@@ -137,8 +136,7 @@ class Batcher(object):
         '''
         if self.eval_train_loader is None:
             self._init_train()
-        for x in self.eval_train_loader:
-            yield x
+        yield from self.eval_train_loader
 
     def get_dev_batch(self):
         '''
@@ -149,8 +147,7 @@ class Batcher(object):
         if self.dev_loader is None:
             self._init_dev()
 
-        for x in self.dev_loader:
-            yield x
+        yield from self.dev_loader
 
 
     def get_test_batch(self):
@@ -162,5 +159,4 @@ class Batcher(object):
         if self.test_loader is None:
             self._init_test()
 
-        for x in self.test_loader:
-            yield x
+        yield from self.test_loader

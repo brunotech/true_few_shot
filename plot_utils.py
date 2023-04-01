@@ -110,7 +110,7 @@ def compute_generalization_estimates(num_train2engine2seed2rel2template2results,
         engine2seed2rel2stat2results = {}
         for engine in engines:
             seed2rel2stat2results = []
-            for seed, rel2template2results in enumerate(num_train2engine2seed2rel2template2results[num_train][engine]):
+            for rel2template2results in num_train2engine2seed2rel2template2results[num_train][engine]:
                 rel2stat2results = {}
                 for rel in rels:
                     template2results = rel2template2results[rel]
@@ -146,8 +146,12 @@ def compute_generalization_estimates(num_train2engine2seed2rel2template2results,
                             if stat in ['entropys', 'prompt_nlls', 'nony_nlls']:
                                 rel2stat2results[rel][f'-{stat}_{beta_name}'] = -rel2stat2results[rel][f'{stat}_{beta_name}']
                     if 'entropys' in keys:
-                        rel2stat2results[rel][f'entropys_test'] = np.array(rel2stat2results[rel]['entropys'])[:, :, -1]
-                        rel2stat2results[rel][f'-entropys_test'] = -rel2stat2results[rel][f'entropys_test']
+                        rel2stat2results[rel]['entropys_test'] = np.array(
+                            rel2stat2results[rel]['entropys']
+                        )[:, :, -1]
+                        rel2stat2results[rel][
+                            '-entropys_test'
+                        ] = -rel2stat2results[rel]['entropys_test']
                     if 'nony_nlls' in keys:
                         rel2stat2results[rel]['nony_nlls_first'] = rel2stat2results[rel]['nony_nlls'][:, :, -1]
                         rel2stat2results[rel]['-nony_nlls_first'] = -rel2stat2results[rel]['nony_nlls_first']
@@ -162,7 +166,9 @@ def compute_generalization_estimates(num_train2engine2seed2rel2template2results,
                                                  for ex_no in range(num_train)]).transpose((1, 0, 2))
                     template2xy2lls2 = -np.array([rel2stat2results[rel]['nlls_$\\beta=100000000.0$'][:, :len(num_train2permutations[num_train])][:, loo_sample == ex_no]
                                                  for ex_no in range(num_train)]).transpose((1, 0, 2))
-                    assert np.sum(template2xy2lls != template2xy2lls2) == 0, f'Expected template2xy2lls == template2xy2lls2'
+                    assert (
+                        np.sum(template2xy2lls != template2xy2lls2) == 0
+                    ), 'Expected template2xy2lls == template2xy2lls2'
 
                     # Using computed posterior
                     bayes_loss = np.log((np.exp(template2xy2lls) * posterior).sum(2))
@@ -217,7 +223,7 @@ def compute_stats(num_train2engine2seed2rel2stat2results, num_train2num_samples,
                         seed2best = []
                         seed2mean = []
                         seed2worst = []
-                        for seed, rel2stat2results in enumerate(num_train2engine2seed2rel2stat2results[num_train][engine2]):
+                        for rel2stat2results in num_train2engine2seed2rel2stat2results[num_train][engine2]:
                             test = [rel2stat2results[rel][stat2].mean(axis=1) for rel in rels]
                             seed2best.append(np.mean([best_func(t) for t in test]))
                             seed2worst.append(np.mean([best_func(-t) for t in test]))
@@ -241,11 +247,17 @@ def compute_stats(num_train2engine2seed2rel2stat2results, num_train2num_samples,
                                     rel2sample2score = []
                                     for rel in rels:
                                         if rel[0] != 'P':
-                                            assert len(rels), f'Only LAMA tasks can be grouped together. Please use a single element list for "rels".'
+                                            assert len(
+                                                rels
+                                            ), 'Only LAMA tasks can be grouped together. Please use a single element list for "rels".'
                                         stat2results1 = num_train2engine2seed2rel2stat2results[num_train][engine1][seed][rel]
                                         stat2results2 = rel2stat2results2[rel]
                                         full_dev_eval_end = None
-                                        assert not ((rel.lower() in {'cb', 'copa', 'wsc'}) and (num_total_dev is None)), f'Please set num_total_dev for {rel}'
+                                        assert (
+                                            rel.lower()
+                                            not in {'cb', 'copa', 'wsc'}
+                                            or num_total_dev is not None
+                                        ), f'Please set num_total_dev for {rel}'
                                         if (num_total_dev is not None) and (num_total_dev < max(num_train2num_samples[num_train])):
                                             full_dev_eval_end = int((max(num_train2num_samples[num_train]) // num_total_dev) * num_total_dev)
                                         estat2 = stat2results2[stat2][:full_dev_eval_end].mean(axis=1)
@@ -361,7 +373,7 @@ def plot_prompt_transfer(plot_type2num_train2engine2engine2stat2results, plot_ty
     fig, ax = plt.subplots()
     im, cbar = heatmap(data, engine_names, engine_names, ax=ax, cmap="Blues", cbarlabel=f"{scale2name[scale]}Test Accuracy of Chosen Prompt(%)".replace('Accuracy of', 'Accuracy\nof') if show_cbar else None, vmin=0, vmax=55)
     annotate_heatmap(im, valfmt="{x:." + str(0 if len(engines) > 6 else 1) + "f}")
-    plt.xlabel(f'Prompt Selection Model', fontsize=16)
+    plt.xlabel('Prompt Selection Model', fontsize=16)
     plt.xticks(fontsize=14)
     if show_y:
         plt.ylabel('Prediction Model', fontsize=16)
